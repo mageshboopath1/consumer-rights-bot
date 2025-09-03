@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.11-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672" # AMQP protocol port
+      - "15672:15672" # Management UI
+    networks:
+      - rag-net
+
+  chromadb-server:
+    image: chromadb/chroma:latest
+    container_name: chromadb-server
+    volumes:
+      # This volume mounts your local 'chroma_data' folder into the container,
+      # making your database persistent and accessible to the server.
+      - ./chroma_data:/chroma_data
+    ports:
+      - "8000:8000"
+    networks:
+      - rag-net
+
+  pii-filter:
+    build:
+      context: .
+      dockerfile: ./RAG-Components/pii-filter/Dockerfile
+    container_name: pii-filter
+    depends_on:
+      - rabbitmq
+    networks:
+      - rag-net
+
+  rag-core:
+    build:
+      context: .
+      dockerfile: ./RAG-Components/rag-core/Dockerfile
+    container_name: rag-core
+    depends_on:
+      - rabbitmq
+      - chromadb-server
+    networks:
+      - rag-net
+
+  interactive-cli:
+    build:
+      context: .
+      dockerfile: ./UI/Dockerfile
+    container_name: interactive-cli
+    depends_on:
+      - rabbitmq
+      - pii-filter
+      - rag-core
+      - chromadb-server
+    networks:
+      - rag-net
+    stdin_open: true
+    tty: true
+
+networks:
+  rag-net: {}
+
+volumes:
+  chroma_data: {}
